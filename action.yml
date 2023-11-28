@@ -74,6 +74,13 @@ inputs:
     description: >-
       Specifies bash commands to run before the runner starts. It's useful for installing dependencies with apt-get, yum, dnf, etc.
     required: false
+  instance-initiated-shutdown-behavior:
+    description: >-
+      Specify here which shutdown behavior you want to use:
+        - 'stop' - to simply stop the instance but leave it in a state that could be started up again;
+        - 'terminate' - to completely terminate the instance.
+    default: 'stop'
+    required: false
 
 outputs:
   label:

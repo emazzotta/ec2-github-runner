@@ -7,7 +7,6 @@ class Config {
       mode: core.getInput('mode'),
       githubToken: core.getInput('github-token'),
       ec2ImageId: core.getInput('ec2-image-id'),
-      instanceInitiatedShutdownBehavior: core.getInput('instance-initiated-shutdown-behavior') || 'stop',
       ec2InstanceType: core.getInput('ec2-instance-type'),
       subnetId: core.getInput('subnet-id'),
       securityGroupId: core.getInput('security-group-id'),
@@ -17,6 +16,7 @@ class Config {
       iamRoleName: core.getInput('iam-role-name'),
       runnerHomeDir: core.getInput('runner-home-dir'),
       preRunnerScript: core.getInput('pre-runner-script'),
+      instanceInitiatedShutdownBehavior: core.getInput('instance-initiated-shutdown-behavior'),
     };
 
     const tags = JSON.parse(core.getInput('aws-resource-tags'));
