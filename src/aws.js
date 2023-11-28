@@ -38,6 +38,7 @@ async function startEc2Instances(label, githubRegistrationToken) {
   const userData = buildUserDataScript(githubRegistrationToken, label);
 
   const params = {
+    InstanceInitiatedShutdownBehavior: config.input.instanceInitiatedShutdownBehavior,
     ImageId: config.input.ec2ImageId,
     InstanceType: config.input.ec2InstanceType,
     MinCount: config.input.ec2InstanceCount,
@@ -46,7 +47,7 @@ async function startEc2Instances(label, githubRegistrationToken) {
     SubnetId: config.input.subnetId,
     SecurityGroupIds: [config.input.securityGroupId],
     IamInstanceProfile: { Name: config.input.iamRoleName },
-    TagSpecifications: config.tagSpecifications,
+    TagSpecifications: config.tagSpecifications
   };
 
   try {
