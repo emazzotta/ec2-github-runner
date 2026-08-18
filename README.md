@@ -241,7 +241,9 @@ Now you're ready to go!
 | `subnet-id` | Required if you use the `start` mode and don't provide `availability-zones-config`. | VPC Subnet Id. The subnet should belong to the same VPC as the specified security group. |
 | `security-group-id` | Required if you use the `start` mode and don't provide `availability-zones-config`. | EC2 Security Group Id. The security group should belong to the same VPC as the specified subnet. Only outbound traffic for port 443 is required. No inbound traffic is required. |
 | `label` | Required if you use the `stop` mode. | Name of the unique label assigned to the runner. The label is provided by the output of the action in the `start` mode. |
-| `ec2-instance-id` | Required if you use the `stop` mode. | EC2 Instance Id of the created runner. The id is provided by the output of the action in the `start` mode. |
+| `ec2-instance-ids` | Required if you use the `stop` mode. | JSON array of the EC2 Instance Ids of the created runners. The ids are provided by the output of the action in the `start` mode. |
+| `ec2-instance-count` | Optional. Used only with the `start` mode. | Number of EC2 instances to launch, all sharing the same label. Defaults to `1`. Incompatible with `use-jit`, which registers exactly one runner per JIT configuration. See [Multiple runners per label](#advanced-multiple-runners-per-label). |
+| `instance-initiated-shutdown-behavior` | Optional. Used only with the `start` mode. | What the instance does when it shuts itself down: `stop` leaves it restartable, `terminate` disposes of it. Defaults to `stop`. |
 | `availability-zones-config` | Optional. Used only with the `start` mode. | JSON string array of objects for multi-AZ failover. Each object must contain `imageId`, `subnetId`, and `securityGroupId`. Optionally specify `region` per entry (defaults to `AWS_REGION`). When provided, takes precedence over individual `ec2-image-id`, `subnet-id`, and `security-group-id` parameters. See [Multi-AZ failover](#advanced-multi-az-failover). |
 | `iam-role-name` | Optional. Used only with the `start` mode. | IAM role name to attach to the created EC2 runner. This allows the runner to have permissions to run additional actions within the AWS account. Requires additional AWS permissions (see above). |
 | `aws-resource-tags` | Optional. Used only with the `start` mode. | Specifies tags to add to the EC2 instance and any attached storage. This field is a stringified JSON array of tag objects, each containing a `Key` and `Value` field. Requires additional AWS permissions (see above). |
@@ -279,8 +281,8 @@ We recommend using [aws-actions/configure-aws-credentials](https://github.com/aw
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Name&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Description                                                                                                                                                                                                                               |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `label`                                                                                                                                                                      | Name of the unique label assigned to the runner. <br><br> The label is used in two cases: <br> - to use as the input of `runs-on` property for the following jobs; <br> - to remove the runner from GitHub when it is not needed anymore. |
-| `ec2-instance-id`                                                                                                                                                            | EC2 Instance Id of the created runner. <br><br> The id is used to terminate the EC2 instance when the runner is not needed anymore.                                                                                                       |
-| `region`                                                                                                                                                                      | AWS region where the EC2 instance was created. <br><br> This is useful for subsequent AWS operations on the instance.                                                                                                                     |
+| `ec2-instance-ids`                                                                                                                                                           | JSON array of the EC2 Instance Ids of the created runners. <br><br> The ids are used to terminate the EC2 instances when the runners are not needed anymore. Pass the value straight back into the `ec2-instance-ids` input of the `stop` mode.                     |
+| `region`                                                                                                                                                                      | AWS region where the EC2 instances were created. <br><br> This is useful for subsequent AWS operations on the instances.                                                                                                                  |
 
 
 ### Example
@@ -296,7 +298,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       label: ${{ steps.start-ec2-runner.outputs.label }}
-      ec2-instance-id: ${{ steps.start-ec2-runner.outputs.ec2-instance-id }}
+      ec2-instance-ids: ${{ steps.start-ec2-runner.outputs.ec2-instance-ids }}
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -351,8 +353,29 @@ jobs:
           mode: stop
           github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           label: ${{ needs.start-runner.outputs.label }}
-          ec2-instance-id: ${{ needs.start-runner.outputs.ec2-instance-id }}
+          ec2-instance-ids: ${{ needs.start-runner.outputs.ec2-instance-ids }}
 ```
+
+### Advanced: Multiple runners per label
+
+Set `ec2-instance-count` to launch several instances from one `start` job. They are created by a single `RunInstances` call, so they all land in the same availability zone and share one label, and `runs-on: ${{ needs.start-runner.outputs.label }}` will spread jobs across them.
+
+```yml
+- id: start-ec2-runner
+  uses: emazzotta/ec2-github-runner@v2
+  with:
+    mode: start
+    github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+    ec2-image-id: ami-123
+    ec2-instance-type: t3.nano
+    subnet-id: subnet-123
+    security-group-id: sg-123
+    ec2-instance-count: 3
+```
+
+The `start` mode waits until every instance has registered itself as an online runner before it finishes, and `ec2-instance-ids` carries all of them into the `stop` job, which terminates them in one call and removes every runner holding the label.
+
+`use-jit` cannot be combined with a count above 1: a JIT configuration registers exactly one runner, so sharing one across several instances would collide. The action rejects that combination up front rather than launching instances that never register.
 
 ### Advanced: JIT runners
 

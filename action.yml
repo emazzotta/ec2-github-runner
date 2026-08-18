@@ -53,12 +53,26 @@ inputs:
       The label is used to remove the runner from GitHub when the runner is not needed anymore.
       This input is required if you use the 'stop' mode.
     required: false
-  ec2-instance-id:
+  ec2-instance-ids:
     description: >-
-      EC2 Instance Id of the created runner.
-      The id is used to terminate the EC2 instance when the runner is not needed anymore.
+      JSON array of the EC2 Instance Ids of the created runners, as returned by the
+      'ec2-instance-ids' output of the 'start' mode.
+      The ids are used to terminate the EC2 instances when the runners are not needed anymore.
       This input is required if you use the 'stop' mode.
     required: false
+  ec2-instance-count:
+    description: >-
+      Number of EC2 instances to launch, all sharing the same label.
+      Incompatible with 'use-jit', which registers exactly one runner per JIT configuration.
+    required: false
+    default: '1'
+  instance-initiated-shutdown-behavior:
+    description: >-
+      What the instance does when it shuts itself down:
+        - 'stop' - stop the instance, leaving it in a state that can be started again;
+        - 'terminate' - terminate the instance completely.
+    required: false
+    default: 'stop'
   iam-role-name:
     description: >-
       IAM Role Name to attach to the created EC2 instance.
@@ -164,13 +178,14 @@ outputs:
       The label is used in two cases:
       - to use as the input of 'runs-on' property for the following jobs;
       - to remove the runner from GitHub when it is not needed anymore.
-  ec2-instance-id:
+  ec2-instance-ids:
     description: >-
-      EC2 Instance Id of the created runner.
-      The id is used to terminate the EC2 instance when the runner is not needed anymore.
+      JSON array of the EC2 Instance Ids of the created runners.
+      The ids are used to terminate the EC2 instances when the runners are not needed anymore.
+      Pass this value straight back into the 'ec2-instance-ids' input of the 'stop' mode.
   region:
     description: >-
-      AWS region where the EC2 instance was created.
+      AWS region where the EC2 instances were created.
       This is useful for subsequent AWS operations on the instance.
 runs:
   using: node24

@@ -5,10 +5,12 @@ class Config {
   constructor() {
     this.input = {
       ec2ImageId: core.getInput('ec2-image-id'),
-      ec2InstanceId: core.getInput('ec2-instance-id'),
+      ec2InstanceCount: parseInt(core.getInput('ec2-instance-count') || '1', 10),
+      ec2InstanceIds: JSON.parse(core.getInput('ec2-instance-ids') || '[]'),
       ec2InstanceType: core.getInput('ec2-instance-type'),
       githubToken: core.getInput('github-token'),
       iamRoleName: core.getInput('iam-role-name'),
+      instanceInitiatedShutdownBehavior: core.getInput('instance-initiated-shutdown-behavior') || 'stop',
       label: core.getInput('label'),
       marketType: core.getInput('market-type'),
       mode: core.getInput('mode'),
@@ -124,6 +126,17 @@ class Config {
         core.info('Using individual parameters as a single availability zone configuration');
       }
 
+      if (!Number.isInteger(this.input.ec2InstanceCount) || this.input.ec2InstanceCount < 1) {
+        throw new Error(`The 'ec2-instance-count' input must be a positive integer.`);
+      }
+
+      if (this.input.useJit && this.input.ec2InstanceCount > 1) {
+        throw new Error(
+          "A JIT configuration registers exactly one runner, so the 'use-jit' input supports only a single instance. " +
+          "Set 'ec2-instance-count' to 1 or disable 'use-jit'."
+        );
+      }
+
       if (this.input.useJit && this.input.runAsService) {
         throw new Error(
           "The 'use-jit' and 'run-runner-as-service' inputs are incompatible. " +
@@ -135,11 +148,11 @@ class Config {
         throw new Error('Invalid `market-type` input. Allowed values: spot.');
       }
     } else if (this.input.mode === 'stop') {
-      if (!this.input.ec2InstanceId) {
-        throw new Error(`The 'ec2-instance-id' input is required for the 'stop' mode.`);
+      if (this.input.ec2InstanceIds.length === 0) {
+        throw new Error(`The 'ec2-instance-ids' input is required for the 'stop' mode.`);
       }
       if (!this.input.label) {
-        core.warning(`The 'label' input is not specified for the 'stop' mode. The runner will be removed by the 'ec2-instance-id' input.`);
+        core.warning(`The 'label' input is not specified for the 'stop' mode, so the runners cannot be removed from GitHub.`);
       }
     } else {
       throw new Error('Wrong mode. Allowed values: start, stop.');

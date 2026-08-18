@@ -3,9 +3,9 @@ const gh = require('./gh');
 const config = require('./config');
 const core = require('@actions/core');
 
-function setOutput(label, ec2InstanceId, region) {
+function setOutput(label, ec2InstanceIds, region) {
   core.setOutput('label', label);
-  core.setOutput('ec2-instance-id', ec2InstanceId);
+  core.setOutput('ec2-instance-ids', ec2InstanceIds);
   core.setOutput('region', region);
 }
 
@@ -23,43 +23,44 @@ async function start() {
     githubRegistrationToken = await gh.getRegistrationToken();
   }
 
-  const result = await aws.startEc2Instance(label, githubRegistrationToken, encodedJitConfig);
-  const ec2InstanceId = result.ec2InstanceId;
-  const region = result.region;
+  const { ec2InstanceIds, region } = await aws.startEc2Instances(label, githubRegistrationToken, encodedJitConfig);
 
-  // Set outputs
-  setOutput(label, ec2InstanceId, region);
+  setOutput(label, ec2InstanceIds, region);
 
-  // Wait for the instance to be running
-  await aws.waitForInstanceRunning(ec2InstanceId, region);
+  for (const ec2InstanceId of ec2InstanceIds) {
+    await aws.waitForInstanceRunning(ec2InstanceId, region);
+  }
 
   let pollCallback = null;
 
   if (config.input.runnerDebug) {
     // Track how much console output we've already printed to avoid duplicates
-    let lastOutputLength = 0;
+    const lastOutputLengths = new Map();
 
     // Poll callback: fetch EC2 serial console output and log any new content
     pollCallback = async () => {
-      const output = await aws.getInstanceConsoleOutput(ec2InstanceId, region);
-      if (output && output.length > lastOutputLength) {
-        const newOutput = output.substring(lastOutputLength);
-        core.info(`--- EC2 Console Output ---\n${newOutput}--- End Console Output ---`);
-        lastOutputLength = output.length;
+      for (const ec2InstanceId of ec2InstanceIds) {
+        const output = await aws.getInstanceConsoleOutput(ec2InstanceId, region);
+        const lastOutputLength = lastOutputLengths.get(ec2InstanceId) || 0;
+        if (output && output.length > lastOutputLength) {
+          const newOutput = output.substring(lastOutputLength);
+          core.info(`--- EC2 Console Output (${ec2InstanceId}) ---\n${newOutput}--- End Console Output ---`);
+          lastOutputLengths.set(ec2InstanceId, output.length);
+        }
       }
     };
   }
 
-  await gh.waitForRunnerRegistered(label, pollCallback);
+  await gh.waitForRunnersRegistered(label, ec2InstanceIds.length, pollCallback);
 }
 
 async function stop() {
-  await aws.terminateEc2Instance();
+  await aws.terminateEc2Instances();
 
   if (config.input.useJit) {
     core.info('JIT runner auto-deregisters after job completion. Skipping runner removal.');
   } else {
-    await gh.removeRunner();
+    await gh.removeRunners();
   }
 }
 
